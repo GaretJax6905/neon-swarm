@@ -1,0 +1,23 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.pylint.main]
+py-version = "3.12"
+persistent = false
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.pylint.reports]
+reports = false
+score = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "unit: one rule function with explicit inputs and expected outcomes",
+    "integration: Flask request and response with no real browser",
+    "e2e: a real Chromium browser talking to the local HTTP server",
+]

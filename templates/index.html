@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <title>Neon Swarm</title>
+    <meta name="description" content="A neon arena shooter: survive endless swarms, level up, and beat The Hive.">
+    <meta name="theme-color" content="#05030f">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="{{ url_for('static', filename='icon-192.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <script id="config" type="application/json">{{ config|tojson }}</script>
+    <canvas id="game" aria-label="Neon Swarm playfield"></canvas>
+
+    <!-- ================= HUD ================= -->
+    <div id="hud" class="hud" hidden>
+      <div class="hud-left">
+        <div class="score"><span id="score">0</span></div>
+        <div id="combo" class="combo" aria-live="off"></div>
+      </div>
+      <div class="hud-center">
+        <div id="wave-label" class="wave-label">WAVE 1</div>
+        <div id="boss" class="boss" hidden>
+          <div class="boss-name">THE HIVE</div>
+          <div class="boss-bar"><div id="boss-fill"></div></div>
+        </div>
+      </div>
+      <div class="hud-right">
+        <div id="shields" class="shields" aria-label="Shields"></div>
+        <button type="button" id="pause-btn" class="icon-btn" aria-label="Pause">❚❚</button>
+      </div>
+      <div class="xp">
+        <div class="xp-bar"><div id="xp-fill"></div></div>
+        <span id="level" class="level">LV 1</span>
+      </div>
+      <div id="fps" class="fps" hidden></div>
+    </div>
+    <button type="button" id="dash-btn" class="dash-btn" aria-label="Dash" hidden><span>DASH</span><i id="dash-ring"></i></button>
+    <div id="banner" class="banner" aria-live="polite"></div>
+
+    <!-- ================= Menu ================= -->
+    <section id="menu" class="screen" aria-labelledby="title">
+      <p class="eyebrow">Survive the swarm. Outgrow it.</p>
+      <h1 id="title" class="logo">NEON<span>SWARM</span></h1>
+      <div class="menu-buttons">
+        <button type="button" class="btn primary" id="play-btn" data-mode="normal">▶ Play</button>
+        <button type="button" class="btn" id="daily-btn" data-mode="daily">☀ Daily Run <small id="daily-date"></small></button>
+      </div>
+      <div class="menu-grid">
+        <div class="panel">
+          <h2>How to play</h2>
+          <ul class="howto">
+            <li><b>Move</b> <kbd>WASD</kbd> / arrows, or drag anywhere on a phone</li>
+            <li><b>Aim</b> with the mouse, or let auto-aim pick the nearest target</li>
+            <li><b>Dash</b> <kbd>Space</kbd> or the DASH button: you can't be hit mid-dash</li>
+            <li><b>Level up</b> by grabbing green shards, then pick an upgrade (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>)</li>
+            <li><kbd>P</kbd> pause · <kbd>M</kbd> mute · <kbd>F</kbd> show FPS</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h2>Top 10 <small id="board-label">Classic</small></h2>
+          <ol id="board" class="board"></ol>
+          <div class="board-tabs" role="group" aria-label="Leaderboard">
+            <button type="button" class="chip on" data-board="normal">Classic</button>
+            <button type="button" class="chip" data-board="daily">Today</button>
+          </div>
+        </div>
+        <div class="panel codex">
+          <h2>The swarm</h2>
+          <ul id="codex"></ul>
+        </div>
+      </div>
+      <p class="footer">Graphics: <select id="quality"><option value="auto">Auto</option><option value="2">High</option><option value="1">Medium</option><option value="0">Low</option></select>
+        · <label><input type="checkbox" id="shake-opt" checked> Screen shake</label></p>
+    </section>
+
+    <!-- ================= Level up ================= -->
+    <section id="levelup" class="screen overlay" hidden aria-labelledby="levelup-title">
+      <h2 id="levelup-title" class="overlay-title">LEVEL <span id="levelup-num">2</span></h2>
+      <p class="overlay-sub">Choose an upgrade</p>
+      <div id="cards" class="cards"></div>
+    </section>
+
+    <!-- ================= Pause ================= -->
+    <section id="pause" class="screen overlay" hidden aria-labelledby="pause-title">
+      <h2 id="pause-title" class="overlay-title">PAUSED</h2>
+      <ul id="owned" class="owned"></ul>
+      <div class="menu-buttons">
+        <button type="button" class="btn primary" id="resume-btn">Resume</button>
+        <button type="button" class="btn" id="quit-btn">Quit to menu</button>
+      </div>
+    </section>
+
+    <!-- ================= Game over ================= -->
+    <section id="over" class="screen overlay" hidden aria-labelledby="over-title">
+      <h2 id="over-title" class="overlay-title danger">HULL BREACHED</h2>
+      <p id="over-score" class="big-score">0</p>
+      <dl id="over-stats" class="stats"></dl>
+      <form id="initials-form" class="initials" hidden>
+        <label for="initials">New high score! Initials:</label>
+        <input id="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+        <button type="submit" class="btn primary">Save</button>
+      </form>
+      <div class="menu-buttons">
+        <button type="button" class="btn primary" id="again-btn">Play again</button>
+        <button type="button" class="btn" id="menu-btn">Menu</button>
+      </div>
+    </section>
+
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+      }
+    </script>
+  </body>
+</html>
