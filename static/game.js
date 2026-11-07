@@ -333,7 +333,7 @@
   }
   const B = pool(500, ["x", "y", "vx", "vy", "life", "dmg", "pierce", "last"]);
   const EB = pool(500, ["x", "y", "vx", "vy", "life", "r"]);
-  const G = pool(700, ["x", "y", "vx", "vy", "val", "age"]);
+  const G = pool(700, ["x", "y", "vx", "vy", "val", "age", "lock"]);
 
   function poolRemove(o, i) {
     const last = --o.n;
@@ -866,6 +866,7 @@
       G.vy[i] = Math.sin(a) * s;
       G.val[i] = val;
       G.age[i] = 0;
+      G.lock[i] = 0;
     }
   }
 
@@ -1394,17 +1395,31 @@
       const dx = player.x - G.x[i];
       const dy = player.y - G.y[i];
       const d = Math.hypot(dx, dy) || 1;
-      if (player.alive && d < magnet && G.age[i] > 0.25) {
-        const pull = 1400 * (1 - d / (magnet + 1)) + 300;
-        G.vx[i] += (dx / d) * pull * dt;
-        G.vy[i] += (dy / d) * pull * dt;
+      // A shard locks on the moment it is inside the magnet (even while it is still
+      // popping out of the explosion), and stays locked even if you dash away.
+      if (player.alive && !G.lock[i] && d < magnet) G.lock[i] = 1;
+      let reached = false;
+      if (player.alive && G.lock[i] && G.age[i] > 0.25) {
+        // Home straight in. Position moves directly at the ship each frame, so it
+        // can never overshoot or orbit; it speeds up the longer it chases, so it
+        // always outruns the ship, even mid-dash.
+        G.lock[i] += dt;
+        const step = (520 + 2600 * (G.lock[i] - 1)) * dt;
+        if (step >= d - player.r) {
+          reached = true;
+        } else {
+          G.x[i] += (dx / d) * step;
+          G.y[i] += (dy / d) * step;
+        }
       } else {
+        // Loose shards drift and slow down (the pop out of an explosion).
         G.vx[i] *= Math.max(0, 1 - 3 * dt);
         G.vy[i] *= Math.max(0, 1 - 3 * dt);
+        G.x[i] += G.vx[i] * dt;
+        G.y[i] += G.vy[i] * dt;
       }
-      G.x[i] += G.vx[i] * dt;
-      G.y[i] += G.vy[i] * dt;
-      if (player.alive && d < player.r + 10 && G.age[i] > 0.2) {
+      const after = Math.hypot(player.x - G.x[i], player.y - G.y[i]);
+      if (player.alive && G.age[i] > 0.2 && (reached || after < player.r + 10)) {
         gainXp(G.val[i]);
         particle(G.x[i], G.y[i], 0, -60, 0.25, 2, C.green, 1);
         poolRemove(G, i--);
@@ -2193,6 +2208,9 @@
       shields: player.shields,
       enemies: enemies.length,
       particles: P.n,
+      gems: G.n,
+      lockedGems: Array.from(G.lock.subarray(0, G.n)).filter(Boolean).length,
+      gemInfo: Array.from({ length: G.n }, (_, i) => [Math.round(Math.hypot(G.x[i] - player.x, G.y[i] - player.y)), +G.lock[i].toFixed(2), +G.age[i].toFixed(2)]),
       bullets: B.n,
       quality: QUALITY[qLevel].name,
       fps: fpsShown,
@@ -2202,6 +2220,13 @@
       frameTimes: Array.from(frameTimes),
     }),
     giveXp: (n) => gainXp(n),
+    // Scatter n single-XP shards in a ring around the ship (for tests).
+    dropXpAround: (n, dist) => {
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * TAU;
+        dropXp(player.x + Math.cos(a) * dist, player.y + Math.sin(a) * dist, 1);
+      }
+    },
     hurt: () => {
       player.inv = 0;
       player.dashT = 0;

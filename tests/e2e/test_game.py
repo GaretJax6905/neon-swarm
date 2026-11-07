@@ -75,3 +75,31 @@ def test_dying_offers_initials_and_saves_to_the_board(page: Page, live_server):
     page.click("#menu-btn")
     page.click("[data-board=daily]")
     expect(page.locator("#board li").first).to_contain_text("TJM")
+
+
+def test_magnet_collects_every_shard_while_moving(page: Page, live_server):
+    """Shards that enter the magnet always reach the ship, even mid-dash.
+
+    Kills elsewhere can drop new shards outside the magnet during the test, so
+    the check is that no *locked-on* shard is still in flight.
+    """
+    start(page, live_server)
+    page.evaluate("window.__neon.setShields(99)")
+    page.evaluate("window.__neon.dropXpAround(40, 80)")
+    page.keyboard.down("d")
+    page.keyboard.press("Space")
+    page.wait_for_timeout(300)
+    page.keyboard.up("d")
+    page.keyboard.down("s")
+    page.keyboard.press("Space")
+    page.keyboard.up("s")
+    # 40 XP is several level-ups; each one pauses the game until a card is picked.
+    for _ in range(60):
+        if page.locator("#levelup").is_visible():
+            page.keyboard.press("1")
+        elif not snapshot(page)["lockedGems"]:
+            break
+        page.wait_for_timeout(100)
+    state = snapshot(page)
+    assert state["lockedGems"] == 0, state["gemInfo"]
+    assert state["level"] >= 4
