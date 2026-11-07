@@ -234,6 +234,7 @@ kbd {
   filter: drop-shadow(0 0 6px var(--cyan));
 }
 
+.shields span { font: 700 1.15rem "Rajdhani", sans-serif; color: var(--cyan); text-shadow: 0 0 8px var(--cyan); align-self: center; }
 .shields i.empty { background: rgba(51, 240, 255, 0.15); filter: none; }
 
 .icon-btn {
@@ -361,6 +362,18 @@ kbd {
 .card b { display: block; font-size: 1.3rem; margin: 4px 0 2px; }
 .card p { margin: 0 0 8px; color: #cfc9ff; font-size: 1.02rem; }
 .pips { display: flex; gap: 4px; }
+.tier { font: 700 0.85rem "Rajdhani", sans-serif; letter-spacing: 0.08em; color: var(--green); text-transform: uppercase; }
+.bonus {
+  margin: -8px 0 16px;
+  padding: 6px 16px;
+  border: 1px solid var(--cyan);
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(51, 240, 255, 0.12);
+  box-shadow: 0 0 16px rgba(51, 240, 255, 0.4);
+}
 .pips i { width: 14px; height: 5px; border-radius: 2px; background: rgba(124, 255, 107, 0.18); }
 .pips i.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .pips i.new { background: #fff; box-shadow: 0 0 8px #fff; }

@@ -1,15 +1,16 @@
 """Level-up upgrades: what each one does and how many times it can stack.
 
 The browser applies the effects; this module is the single list of what exists,
-so the menu, the level-up cards, and the tests all agree.
+so the menu, the level-up cards, and the tests all agree. "max": None means the
+upgrade is endless: it can be picked again on every level-up.
 """
 
 UPGRADES = {
     "rapid": {
         "name": "Overclock",
         "icon": "⚡",
-        "text": "Fire 18% faster.",
-        "max": 6,
+        "text": "Fire 18% faster (+6% per pick after the 6th).",
+        "max": None,
     },
     "spread": {
         "name": "Split Beam",
@@ -26,8 +27,8 @@ UPGRADES = {
     "power": {
         "name": "Hot Plasma",
         "icon": "🔥",
-        "text": "+1 damage per bullet.",
-        "max": 5,
+        "text": "+1 damage per bullet and blade.",
+        "max": None,
     },
     "speed": {
         "name": "Thrusters",
@@ -38,14 +39,14 @@ UPGRADES = {
     "magnet": {
         "name": "Tractor Field",
         "icon": "🧲",
-        "text": "Pull XP shards from 60% farther away.",
-        "max": 3,
+        "text": "Pull XP shards from farther away.",
+        "max": None,
     },
     "hull": {
         "name": "Reinforced Hull",
         "icon": "🛡️",
         "text": "+1 max shield and repair 1.",
-        "max": 4,
+        "max": None,
     },
     "dash": {
         "name": "Blink Drive",
@@ -56,8 +57,9 @@ UPGRADES = {
     "orbit": {
         "name": "Orbit Blades",
         "icon": "🌀",
-        "text": "+1 blade circling your ship.",
-        "max": 4,
+        "text": "+1 blade. Blades shoot at half your fire rate and block enemy shots, "
+        "but break after 5 hits.",
+        "max": None,
     },
     "nova": {
         "name": "Nova Core",
@@ -68,17 +70,34 @@ UPGRADES = {
 }
 
 OFFER_SIZE = 3
+REPAIR_EVERY = 5
+REPAIR_AMOUNT = 2
+BLADE_HP = 5  # enemy-bullet hits an orbit blade survives
+
+
+def is_endless(key):
+    """True if this upgrade never maxes out."""
+    return UPGRADES[key]["max"] is None
 
 
 def available(owned):
     """Upgrade ids that can still be picked, given {id: times_picked}."""
     owned = owned or {}
-    return [key for key, info in UPGRADES.items() if owned.get(key, 0) < info["max"]]
+    return [
+        key
+        for key, info in UPGRADES.items()
+        if info["max"] is None or owned.get(key, 0) < info["max"]
+    ]
 
 
 def can_pick(key, owned):
     """True if this upgrade exists and is not maxed out."""
     return key in available(owned)
+
+
+def repairs_at(level):
+    """Shields repaired on reaching this level (every 5th level repairs 2)."""
+    return REPAIR_AMOUNT if level > 1 and level % REPAIR_EVERY == 0 else 0
 
 
 def xp_to_next(level):

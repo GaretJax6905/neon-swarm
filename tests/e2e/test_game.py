@@ -103,3 +103,73 @@ def test_magnet_collects_every_shard_while_moving(page: Page, live_server):
     state = snapshot(page)
     assert state["lockedGems"] == 0, state["gemInfo"]
     assert state["level"] >= 4
+
+
+def test_blades_shoot_at_half_the_ship_fire_rate(page: Page, live_server):
+    """Two blades together fire about as many bullets as the ship (2 x half)."""
+    start(page, live_server)
+    page.evaluate("window.__neon.setShields(99)")
+    page.evaluate("window.__neon.grant('orbit', 2)")
+    for _ in range(250):
+        if page.locator("#levelup").is_visible():
+            page.keyboard.press("1")
+        state = snapshot(page)
+        if state["bladeShots"] >= 20 and state["shipShots"] >= 20:
+            break
+        page.wait_for_timeout(100)
+    # Level-ups above may have added Split Beam (+1 blade bullet per 2 picks).
+    per_volley = 1 + state["upgrades"].get("spread", 0) // 2
+    ship_volley = 1 + state["upgrades"].get("spread", 0)
+    ratio = (state["bladeShots"] / per_volley) / max(
+        1, state["shipShots"] / ship_volley
+    )
+    assert 0.5 < ratio < 1.5, state
+
+
+def test_every_fifth_level_repairs_two_shields(page: Page, live_server):
+    """Reaching level 5 shows the bonus and repairs 2 shields."""
+    start(page, live_server)
+    page.evaluate("window.__neon.setShields(1)")
+    page.evaluate(
+        "window.__neon.giveXp(window.__neon_xp = JSON.parse("
+        "document.getElementById('config').textContent).xp_table"
+        ".slice(0, 4).reduce((a, b) => a + b))"
+    )
+    for _ in range(3):
+        expect(page.locator("#levelup")).to_be_visible()
+        expect(page.locator("#levelup-bonus")).to_be_hidden()
+        page.keyboard.press("1")
+    expect(page.locator("#levelup-num")).to_have_text("5")
+    expect(page.locator("#levelup-bonus")).to_contain_text("+2 shields repaired")
+    state = snapshot(page)
+    assert state["shields"] == min(3, state["maxShields"]) or state["shields"] == 3
+
+
+def test_hull_is_endless_and_hud_stays_compact(page: Page, live_server):
+    """Hull keeps stacking past the old cap; big shield counts show as a number."""
+    start(page, live_server)
+    page.evaluate("window.__neon.grant('hull', 9)")
+    assert snapshot(page)["maxShields"] == 12
+    expect(page.locator("#shields span")).to_have_text(re.compile(r"\d+/12"))
+
+
+def test_blade_breaks_after_five_enemy_hits(page: Page, live_server):
+    """Enemy shots chip a blade; the fifth hit destroys it and it can be re-bought."""
+    start(page, live_server)
+    page.evaluate("window.__neon.setShields(99)")
+    page.evaluate("window.__neon.grant('orbit', 2)")
+    for hit in range(1, 5):
+        page.evaluate("window.__neon.shootBlade(0)")
+        page.wait_for_function(
+            f"window.__neon.snapshot().bladeHp.includes({5 - hit})", timeout=3000
+        )
+        if page.locator("#levelup").is_visible():
+            page.keyboard.press("1")
+    page.evaluate("window.__neon.shootBlade(0)")
+    page.wait_for_function(
+        "window.__neon.snapshot().bladeHp.length === 1", timeout=3000
+    )
+    state = snapshot(page)
+    assert state["upgrades"]["orbit"] == 1
+    page.evaluate("window.__neon.grant('orbit', 1)")
+    assert snapshot(page)["bladeHp"] == [5, 5] or len(snapshot(page)["bladeHp"]) == 2

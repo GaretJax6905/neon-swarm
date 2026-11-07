@@ -35,6 +35,9 @@ def test_config_endpoint(client):
     assert data["daily"] == "daily-2026-11-06"
     assert "drifter" in data["enemies"] and "rapid" in data["upgrades"]
     assert data["xp_table"][0] == 5
+    assert data["repair_every"] == 5 and data["repair_amount"] == 2
+    assert data["upgrades"]["hull"]["max"] is None
+    assert data["blade_hp"] == 5
 
 
 def test_daily_run_uses_the_shared_seed(client):

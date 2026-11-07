@@ -331,7 +331,7 @@
     for (const f of fields) o[f] = new Float32Array(max);
     return o;
   }
-  const B = pool(500, ["x", "y", "vx", "vy", "life", "dmg", "pierce", "last"]);
+  const B = pool(900, ["x", "y", "vx", "vy", "life", "dmg", "pierce", "last", "kind"]); // kind 0 = ship, 1 = blade
   const EB = pool(500, ["x", "y", "vx", "vy", "life", "r"]);
   const G = pool(700, ["x", "y", "vx", "vy", "val", "age", "lock"]);
 
@@ -583,6 +583,9 @@
     xp: 0,
     up: {},
     bladeAng: 0,
+    blades: [], // { hp, x, y, hitT } — each blade breaks after CONFIG.blade_hp enemy-bullet hits
+    bladeFireT: 0,
+    bladeNext: 0,
     alive: true,
     trail: 0,
   };
@@ -593,14 +596,15 @@
     return player.up[key] || 0;
   }
   const S = {
-    fireRate: () => 6 * Math.pow(1.18, stat("rapid")),
+    // Endless upgrades grow fast at first, then slower, so late runs stay playable.
+    fireRate: () => 6 * Math.pow(1.18, Math.min(6, stat("rapid"))) * (1 + 0.06 * Math.max(0, stat("rapid") - 6)),
     shots: () => 1 + stat("spread"),
     pierce: () => stat("pierce"),
     dmg: () => 1 + stat("power"),
     speed: () => 290 * Math.pow(1.12, stat("speed")),
-    magnet: () => 95 * (1 + 0.6 * stat("magnet")),
+    magnet: () => Math.min(1100, 95 * (1 + 0.6 * Math.min(3, stat("magnet")) + 0.25 * Math.max(0, stat("magnet") - 3))),
     dashCd: () => 1.5 * Math.pow(0.75, stat("dash")),
-    blades: () => stat("orbit"),
+    blades: () => player.blades.length,
     nova: () => stat("nova"),
   };
 
@@ -767,24 +771,30 @@
     game.slowScale = Math.min(game.slowScale, timeScale);
   }
 
+  const shotCount = [0, 0]; // [ship, blade] bullets fired this run
+
+  function spawnBullet(x, y, a, speed, kind) {
+    if (B.n >= B.max) return;
+    const i = B.n++;
+    B.x[i] = x;
+    B.y[i] = y;
+    B.vx[i] = Math.cos(a) * speed;
+    B.vy[i] = Math.sin(a) * speed;
+    B.life[i] = 0.8;
+    B.dmg[i] = S.dmg();
+    B.pierce[i] = S.pierce();
+    B.last[i] = -1;
+    B.kind[i] = kind;
+    shotCount[kind]++;
+  }
+
   function fire() {
     const shots = S.shots();
     const spread = 0.13;
     const base = player.ang - ((shots - 1) * spread) / 2;
-    const dmg = S.dmg();
-    const pierce = S.pierce();
     for (let s = 0; s < shots; s++) {
-      if (B.n >= B.max) break;
       const a = base + s * spread + rand(-0.02, 0.02);
-      const i = B.n++;
-      B.x[i] = player.x + Math.cos(a) * 18;
-      B.y[i] = player.y + Math.sin(a) * 18;
-      B.vx[i] = Math.cos(a) * 980;
-      B.vy[i] = Math.sin(a) * 980;
-      B.life[i] = 0.8;
-      B.dmg[i] = dmg;
-      B.pierce[i] = pierce;
-      B.last[i] = -1;
+      spawnBullet(player.x + Math.cos(a) * 18, player.y + Math.sin(a) * 18, a, 980, 0);
     }
     const mx = player.x + Math.cos(player.ang) * 20;
     const my = player.y + Math.sin(player.ang) * 20;
@@ -1378,6 +1388,19 @@
         poolRemove(EB, i--);
         continue;
       }
+      // Blades block enemy bullets (and take a hit each time).
+      let blocked = false;
+      for (let k = 0; k < player.blades.length && player.alive; k++) {
+        const b = player.blades[k];
+        const br = 13 + EB.r[i];
+        if ((b.x - x) ** 2 + (b.y - y) ** 2 < br * br) {
+          poolRemove(EB, i--);
+          hitBlade(k);
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
       if (player.alive) {
         const rr = player.r * 0.7 + EB.r[i];
         if ((player.x - x) ** 2 + (player.y - y) ** 2 < rr * rr && player.inv <= 0 && player.dashT <= 0) {
@@ -1430,15 +1453,54 @@
     }
   }
 
+  // Orbit radius grows past 4 blades so they don't overlap.
+  function bladeRadius(n) {
+    return 78 + 7 * Math.max(0, n - 4);
+  }
+
+  function placeBlades() {
+    const list = player.blades;
+    const n = list.length;
+    const R = bladeRadius(n);
+    for (let k = 0; k < n; k++) {
+      const a = player.bladeAng + (k / n) * TAU;
+      list[k].x = player.x + Math.cos(a) * R;
+      list[k].y = player.y + Math.sin(a) * R;
+    }
+  }
+
+  // An enemy bullet hit blade k: chip it, and break it once it runs out of hits.
+  function hitBlade(k) {
+    const blade = player.blades[k];
+    blade.hp--;
+    blade.hitT = 0.12;
+    burst(blade.x, blade.y, C.orange, 6, 220, 0.3, 1.6);
+    if (blade.hp > 0) {
+      sfx.pickup();
+      return;
+    }
+    player.blades.splice(k, 1);
+    player.up.orbit = player.blades.length;
+    burst(blade.x, blade.y, C.cyan, 30, 420, 0.6, 2.4);
+    burst(blade.x, blade.y, C.white, 12, 300, 0.4, 2);
+    ring(blade.x, blade.y, 120, C.cyan, 0.4, 4);
+    floatText(blade.x, blade.y - 18, "BLADE LOST", C.red);
+    addShake(0.25);
+    sfx.kill(false);
+    placeBlades();
+  }
+
   function updateBlades(dt) {
     const n = S.blades();
     if (!n || !player.alive) return;
-    player.bladeAng += dt * 3.2;
-    const R = 78;
+    player.bladeAng += dt * 4.8;
+    placeBlades();
     for (let k = 0; k < n; k++) {
+      const blade = player.blades[k];
+      blade.hitT = Math.max(0, blade.hitT - dt);
       const a = player.bladeAng + (k / n) * TAU;
-      const bx = player.x + Math.cos(a) * R;
-      const by = player.y + Math.sin(a) * R;
+      const bx = blade.x;
+      const by = blade.y;
       nearby(bx, by, 14, (e) => {
         if (e.blade > 0) return true;
         const rr = e.r + 12;
@@ -1450,6 +1512,42 @@
         return true;
       });
     }
+
+    // Blade guns: blades take turns firing, so each one shoots at half the
+    // ship's fire rate. They use the ship's damage, pierce and fire-rate
+    // upgrades, and get +1 bullet for every 2 Split Beam picks.
+    player.bladeFireT -= dt;
+    const period = 2 / S.fireRate() / n;
+    for (let guard = 0; guard < 4 && player.bladeFireT <= 0; guard++) {
+      const k = player.bladeNext % n;
+      const bx = player.blades[k].x;
+      const by = player.blades[k].y;
+      const target = nearestEnemy(bx, by, 650);
+      if (!target) {
+        player.bladeFireT = 0; // nothing in range: wait, don't bank shots
+        break;
+      }
+      player.bladeNext++;
+      player.bladeFireT += period;
+      const shots = 1 + Math.floor(stat("spread") / 2);
+      const aim = Math.atan2(target.y - by, target.x - bx);
+      for (let s = 0; s < shots; s++) spawnBullet(bx, by, aim + (s - (shots - 1) / 2) * 0.13, 900, 1);
+      particle(bx, by, Math.cos(aim) * 160, Math.sin(aim) * 160, 0.12, 2, C.cyan, 6);
+    }
+  }
+
+  function nearestEnemy(x, y, range) {
+    let best = range * range;
+    let found = null;
+    for (const e of enemies) {
+      if (e.dead || e.born > 0.2) continue;
+      const d = (e.x - x) ** 2 + (e.y - y) ** 2;
+      if (d < best) {
+        best = d;
+        found = e;
+      }
+    }
+    return found;
   }
 
   function gainXp(v) {
@@ -1682,18 +1780,21 @@
     }
     ctx.fill();
 
-    // player bullets: glow + bright streak
-    for (let i = 0; i < B.n; i++) drawGlow(C.yellow, B.x[i], B.y[i], 22, 0.65);
+    // player bullets: glow + bright streak (yellow from the ship, cyan from blades)
+    for (let i = 0; i < B.n; i++) drawGlow(B.kind[i] ? C.cyan : C.yellow, B.x[i], B.y[i], B.kind[i] ? 18 : 22, 0.65);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = "#fff6c2";
-    ctx.lineWidth = 3;
     ctx.lineCap = "round";
-    ctx.beginPath();
-    for (let i = 0; i < B.n; i++) {
-      ctx.moveTo(B.x[i], B.y[i]);
-      ctx.lineTo(B.x[i] - B.vx[i] * 0.018, B.y[i] - B.vy[i] * 0.018);
+    for (let kind = 0; kind < 2; kind++) {
+      ctx.strokeStyle = kind ? "#d8fdff" : "#fff6c2";
+      ctx.lineWidth = kind ? 2.5 : 3;
+      ctx.beginPath();
+      for (let i = 0; i < B.n; i++) {
+        if (B.kind[i] !== kind) continue;
+        ctx.moveTo(B.x[i], B.y[i]);
+        ctx.lineTo(B.x[i] - B.vx[i] * 0.018, B.y[i] - B.vy[i] * 0.018);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
 
     // particles
     drawParticles();
@@ -1712,15 +1813,16 @@
     const nb = S.blades();
     if (nb && player.alive && game.mode !== "menu") {
       for (let k = 0; k < nb; k++) {
-        const a = player.bladeAng + (k / nb) * TAU;
-        const bx = player.x + Math.cos(a) * 78;
-        const by = player.y + Math.sin(a) * 78;
-        drawGlow(C.cyan, bx, by, 34, 0.7);
+        const blade = player.blades[k];
+        // Color shows how many hits it has left: cyan, then yellow, then red.
+        const left = blade.hp / CONFIG.blade_hp;
+        const col = left > 0.6 ? C.cyan : left > 0.3 ? C.yellow : C.red;
+        drawGlow(col, blade.x, blade.y, 34, 0.7);
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#d8fdff";
+        ctx.strokeStyle = blade.hitT > 0 ? "#ffffff" : left > 0.6 ? "#d8fdff" : COLORS[col];
         ctx.lineWidth = 3;
         ctx.beginPath();
-        polyPath(bx, by, 11, 3, player.bladeAng * 3 + k);
+        polyPath(blade.x, blade.y, 11, 3, player.bladeAng * 3 + k);
         ctx.stroke();
       }
     }
@@ -1831,7 +1933,11 @@
     const shieldKey = `${player.shields}/${player.maxShields}`;
     if (force || hudCache.shields !== shieldKey) {
       hudCache.shields = shieldKey;
-      $("#shields").innerHTML = Array.from({ length: player.maxShields }, (_, i) => `<i class="${i < player.shields ? "" : "empty"}"></i>`).join("");
+      // Up to 8 shields show as icons; past that, one icon and a count.
+      $("#shields").innerHTML =
+        player.maxShields <= 8
+          ? Array.from({ length: player.maxShields }, (_, i) => `<i class="${i < player.shields ? "" : "empty"}"></i>`).join("")
+          : `<i class="${player.shields ? "" : "empty"}"></i><span>${player.shields}/${player.maxShields}</span>`;
     }
     const boss = enemies.find((e) => e.kind === "hive" && !e.dead);
     $("#boss").hidden = !boss;
@@ -1866,8 +1972,24 @@
     sfx.level();
     burst(player.x, player.y, C.green, 40, 500, 0.8, 2.5);
     ring(player.x, player.y, 300, C.green, 0.6, 5);
-    $("#levelup-num").textContent = player.level - game.pendingLevels;
-    const open = Object.keys(UPG).filter((k) => (player.up[k] || 0) < UPG[k].max);
+    const shownLevel = player.level - game.pendingLevels;
+    $("#levelup-num").textContent = shownLevel;
+    // Every 5th level repairs shields.
+    const bonus = $("#levelup-bonus");
+    bonus.hidden = true;
+    if (shownLevel % CONFIG.repair_every === 0) {
+      const before = player.shields;
+      player.shields = Math.min(player.maxShields, player.shields + CONFIG.repair_amount);
+      const healed = player.shields - before;
+      bonus.textContent = healed ? `Level ${shownLevel} bonus: +${healed} shield${healed > 1 ? "s" : ""} repaired` : `Level ${shownLevel} bonus: shields already full`;
+      bonus.hidden = false;
+      if (healed) {
+        ring(player.x, player.y, 220, C.cyan, 0.7, 6);
+        floatText(player.x, player.y - 34, `+${healed} 🛡`, C.cyan);
+      }
+      updateHud(true);
+    }
+    const open = Object.keys(UPG).filter((k) => UPG[k].max == null || (player.up[k] || 0) < UPG[k].max);
     const picks = [];
     while (picks.length < CONFIG.offer_size && open.length) picks.push(open.splice((Math.random() * open.length) | 0, 1)[0]);
     const cards = $("#cards");
@@ -1884,8 +2006,11 @@
       } else {
         const u = UPG[key];
         const have = player.up[key] || 0;
-        const pips = Array.from({ length: u.max }, (_, i) => `<i class="${i < have ? "on" : i === have ? "new" : ""}"></i>`).join("");
-        btn.innerHTML = `<span class="key">${idx + 1}</span><span class="icon">${u.icon}</span><b>${u.name}</b><p>${u.text}</p><span class="pips">${pips}</span>`;
+        const meter =
+          u.max == null
+            ? `<span class="tier">Rank ${have} → ${have + 1} · no limit</span>`
+            : `<span class="pips">${Array.from({ length: u.max }, (_, i) => `<i class="${i < have ? "on" : i === have ? "new" : ""}"></i>`).join("")}</span>`;
+        btn.innerHTML = `<span class="key">${idx + 1}</span><span class="icon">${u.icon}</span><b>${u.name}</b><p>${u.text}</p>${meter}`;
       }
       btn.addEventListener("click", () => pickUpgrade(key));
       cards.appendChild(btn);
@@ -1894,17 +2019,26 @@
     setTimeout(() => cards.firstChild && cards.firstChild.focus({ preventScroll: true }), 50);
   }
 
+  function applyUpgrade(key) {
+    player.up[key] = (player.up[key] || 0) + 1;
+    if (key === "hull") {
+      player.maxShields++;
+      player.shields = Math.min(player.maxShields, player.shields + 1);
+    }
+    if (key === "orbit") {
+      player.blades.push({ hp: CONFIG.blade_hp, x: player.x, y: player.y, hitT: 0 });
+      player.up.orbit = player.blades.length;
+      placeBlades();
+    }
+  }
+
   function pickUpgrade(key) {
     if (game.mode !== "levelup") return;
     if (key === "__repair") {
       player.shields = Math.min(player.maxShields, player.shields + 1);
       game.score += 500;
     } else {
-      player.up[key] = (player.up[key] || 0) + 1;
-      if (key === "hull") {
-        player.maxShields++;
-        player.shields = Math.min(player.maxShields, player.shields + 1);
-      }
+      applyUpgrade(key);
     }
     $("#levelup").hidden = true;
     game.mode = "play";
@@ -1981,6 +2115,9 @@
       dashT: 0,
       dashCd: 0,
       fireT: 0,
+      blades: [],
+      bladeFireT: 0,
+      bladeNext: 0,
       level: 1,
       xp: 0,
       up: {},
@@ -2001,6 +2138,8 @@
     try {
       const run = await api.run(daily);
       resetWorld();
+      shotCount[0] = 0;
+      shotCount[1] = 0;
       Object.assign(game, { seed: run.seed, daily: run.daily, score: 0, kills: 0, combo: 0, comboT: 0, time: 0, pendingLevels: 0, slow: 0, slowScale: 1, shake: 0, flash: 0, wave: 0 });
       for (const k in hudCache) delete hudCache[k];
       input.mouseT = -99;
@@ -2209,6 +2348,10 @@
       enemies: enemies.length,
       particles: P.n,
       gems: G.n,
+      maxShields: player.maxShields,
+      shipShots: shotCount[0],
+      bladeShots: shotCount[1],
+      bladeHp: player.blades.map((b) => b.hp),
       lockedGems: Array.from(G.lock.subarray(0, G.n)).filter(Boolean).length,
       gemInfo: Array.from({ length: G.n }, (_, i) => [Math.round(Math.hypot(G.x[i] - player.x, G.y[i] - player.y)), +G.lock[i].toFixed(2), +G.age[i].toFixed(2)]),
       bullets: B.n,
@@ -2220,6 +2363,16 @@
       frameTimes: Array.from(frameTimes),
     }),
     giveXp: (n) => gainXp(n),
+    // Fire an enemy bullet straight at blade k (for tests).
+    shootBlade: (k) => {
+      const b = player.blades[k];
+      const a = Math.atan2(b.y - player.y, b.x - player.x);
+      enemyShot(b.x + Math.cos(a) * 40, b.y + Math.sin(a) * 40, a + Math.PI, 600);
+    },
+    grant: (key, times = 1) => {
+      for (let k = 0; k < times; k++) applyUpgrade(key);
+      updateHud(true);
+    },
     // Scatter n single-XP shards in a ring around the ship (for tests).
     dropXpAround: (n, dist) => {
       for (let k = 0; k < n; k++) {

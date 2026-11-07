@@ -37,7 +37,22 @@ Enemies get +8% HP and +2% speed per wave (speed caps at +60%). Kills chain into
 
 ## Upgrades
 
-Overclock (fire rate), Split Beam (more bullets), Phase Rounds (pierce), Hot Plasma (damage), Thrusters (speed), Tractor Field (pickup range), Reinforced Hull (+1 shield), Blink Drive (dash cooldown), Orbit Blades, Nova Core (dash shockwave). Each has a max; once everything is maxed you get Field Repair instead.
+| Upgrade | Effect | Limit |
+| --- | --- | --- |
+| 🛡️ Reinforced Hull | +1 max shield and repair 1 | **Endless** |
+| 🔥 Hot Plasma | +1 damage (bullets, blade bullets, blade hits) | **Endless** |
+| ⚡ Overclock | Fire 18% faster (+6% per pick after the 6th) | **Endless** |
+| 🧲 Tractor Field | Pull XP shards from farther away | **Endless** |
+| 🌀 Orbit Blades | +1 blade (see below) | **Endless** |
+| 🔱 Split Beam | +1 bullet per shot (blades get +1 per 2 picks) | 4 |
+| 🪡 Phase Rounds | Bullets pierce 1 more enemy | 3 |
+| 🚀 Thrusters | Move 12% faster | 4 |
+| 💨 Blink Drive | Dash recharges 25% faster | 3 |
+| 💥 Nova Core | Dashing releases a shockwave | 3 |
+
+**Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. A broken blade can be bought back on a later level-up.
+
+**Every 5th level** (5, 10, 15, …) repairs **2 shields**, shown on that level's upgrade screen.
 
 ## How it stays smooth (60 fps on phones)
 

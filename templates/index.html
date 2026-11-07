@@ -62,6 +62,8 @@
             <li><b>Aim</b> with the mouse, or let auto-aim pick the nearest target</li>
             <li><b>Dash</b> <kbd>Space</kbd> or the DASH button: you can't be hit mid-dash</li>
             <li><b>Level up</b> by grabbing green shards, then pick an upgrade (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>)</li>
+            <li><b>Every 5th level</b> repairs 2 shields</li>
+            <li><b>Blades</b> shoot and block enemy shots, but break after 5 hits</li>
             <li><kbd>P</kbd> pause · <kbd>M</kbd> mute · <kbd>F</kbd> show FPS</li>
           </ul>
         </div>
@@ -86,6 +88,7 @@
     <section id="levelup" class="screen overlay" hidden aria-labelledby="levelup-title">
       <h2 id="levelup-title" class="overlay-title">LEVEL <span id="levelup-num">2</span></h2>
       <p class="overlay-sub">Choose an upgrade</p>
+      <p id="levelup-bonus" class="bonus" hidden></p>
       <div id="cards" class="cards"></div>
     </section>
 
