@@ -73,3 +73,11 @@ def test_bad_wave_numbers_are_rejected(wave):
     """Waves are whole numbers from 1 to MAX_WAVE."""
     with pytest.raises(waves.WaveError):
         waves.plan("ok", wave)
+
+
+def test_tougher_enemies_drop_more_xp():
+    """XP climbs with toughness, so harder kills drop more shards."""
+    xp = {key: info["xp"] for key, info in waves.ENEMIES.items()}
+    assert xp["drifter"] == xp["dart"] == 1
+    assert xp["drifter"] < xp["splitter"] < xp["orbiter"] < xp["tank"] < xp["hive"]
+    assert xp["shard"] == 0

@@ -37,7 +37,7 @@ def test_config_endpoint(client):
     assert data["xp_table"][0] == 5
     assert data["repair_every"] == 5 and data["repair_amount"] == 2
     assert data["upgrades"]["hull"]["max"] is None
-    assert data["blade_hp"] == 5
+    assert data["blade_hp"] == 5 and data["blade_repair_every"] == 2
 
 
 def test_daily_run_uses_the_shared_seed(client):

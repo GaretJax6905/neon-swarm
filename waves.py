@@ -44,7 +44,7 @@ ENEMIES = {
         "radius": 18,
         "color": "#ff4fd8",
         "score": 30,
-        "xp": 2,
+        "xp": 3,
         "about": "Bursts into three shards when destroyed.",
     },
     "shard": {
@@ -68,7 +68,7 @@ ENEMIES = {
         "radius": 15,
         "color": "#9d6bff",
         "score": 40,
-        "xp": 3,
+        "xp": 5,
         "about": "Circles at range and fires slow plasma.",
     },
     "tank": {
@@ -80,7 +80,7 @@ ENEMIES = {
         "radius": 26,
         "color": "#ff7a2f",
         "score": 80,
-        "xp": 6,
+        "xp": 10,
         "about": "Slow, armored, and shoves you back.",
     },
     "hive": {
@@ -92,7 +92,7 @@ ENEMIES = {
         "radius": 52,
         "color": "#7cff6b",
         "score": 1000,
-        "xp": 30,
+        "xp": 40,
         "about": "Boss every 10 waves: bullet rings and Drifter swarms.",
     },
 }

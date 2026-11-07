@@ -203,3 +203,31 @@ def test_music_follows_the_fight(page: Page, live_server):
     assert (
         page.evaluate("JSON.parse(localStorage.getItem('neon-swarm:music'))") is False
     )
+
+
+def test_damaged_blades_repair_every_second_wave(page: Page, live_server):
+    """A chipped blade regains one hit after each even wave, up to full."""
+    start(page, live_server)
+    page.evaluate("window.__neon.setShields(99)")
+    page.evaluate("window.__neon.grant('orbit', 2)")
+    for hit in (1, 2):
+        page.evaluate("window.__neon.shootBlade(0)")
+        page.wait_for_function(
+            f"window.__neon.snapshot().bladeHp.includes({5 - hit})", timeout=3000
+        )
+    page.evaluate("window.__neon.clearWave()")  # wave 1: odd, no repair
+    page.wait_for_function("window.__neon.snapshot().wave === 2", timeout=10000)
+    assert sorted(snapshot(page)["bladeHp"]) == [3, 5]
+    page.evaluate("window.__neon.clearWave()")  # wave 2: repair
+    page.wait_for_function("window.__neon.snapshot().bladeHp.includes(4)", timeout=5000)
+    assert sorted(snapshot(page)["bladeHp"]) == [4, 5]
+
+
+def test_tough_enemies_drop_a_shard_per_xp(page: Page, live_server):
+    """A Bulwark-sized payout scatters as single shards; the Hive bundles some."""
+    start(page, live_server)
+    before = snapshot(page)["gems"]
+    page.evaluate("window.__neon.dropXp(10)")
+    assert snapshot(page)["gems"] - before == 10
+    page.evaluate("window.__neon.dropXp(40)")
+    assert snapshot(page)["gems"] - before == 10 + 16
