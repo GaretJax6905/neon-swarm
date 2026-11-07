@@ -1,6 +1,6 @@
 # Neon Swarm
 
-**▶ Play it: https://neon-swarm.onrender.com** (free hosting: the first visit after a quiet spell can take ~30–60 s to wake up)
+**▶ Play it: https://neon-swarm-92ee.onrender.com** (free hosting: the first visit after a quiet spell can take ~30–60 s to wake up)
 
 A neon arena survival shooter in the browser. Fly a tiny ship around a glowing arena, mow down endless swarms, grab green shards to level up, stack upgrades, and survive **The Hive** every 10 waves.
 
