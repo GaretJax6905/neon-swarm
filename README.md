@@ -1,14 +1,26 @@
 # Neon Swarm
 
-**▶ Play it: https://neon-swarm-92ee.onrender.com** (free hosting: the first visit after a quiet spell can take ~30–60 s to wake up)
+**A neon arena survival shooter written from scratch on HTML5 Canvas, with no game engine, and tuned to stay smooth on phones.**
+
+[![Play it live](https://img.shields.io/badge/▶_play_it-neon--swarm-22d3ee?style=for-the-badge)](https://neon-swarm-92ee.onrender.com)
+[![Python checks](https://github.com/GaretJax6905/neon-swarm/actions/workflows/python.yml/badge.svg)](https://github.com/GaretJax6905/neon-swarm/actions/workflows/python.yml)
+
+![Neon Swarm wave 14: the ship with orbit blades fighting a ring of Orbiters on the warping neon grid](docs/screenshot.png)
+
+> Free hosting: the first visit after a quiet spell can take ~30–60 s to wake up.
+
+| | |
+| --- | --- |
+| **Front end** | Vanilla JavaScript, HTML5 Canvas 2D, Web Audio API, Pointer Events, PWA |
+| **Back end** | Python 3.12, Flask JSON API serving deterministic wave plans |
+| **Quality** | 48 automated tests, including 11 real-browser Playwright journeys, plus Black and Pylint. All run in GitHub Actions on every push and PR |
+| **Deploy** | Render, auto-deployed from `main` |
 
 A neon arena survival shooter in the browser. Fly a tiny ship around a glowing arena, mow down endless swarms, grab green shards to level up, stack upgrades, and survive **The Hive** every 10 waves.
 
 - **▶ Play:** a fresh random run every time.
 - **☀ Daily Run:** everyone gets the exact same waves until midnight UTC. Compare scores.
 - Works with keyboard + mouse or touch, and installs to a phone home screen (PWA).
-
-A sister project to [RPS Chaos](https://github.com/GaretJax6905/rps-chaos), built with Claude (AI) as a coding partner.
 
 ## Controls
 
@@ -91,6 +103,21 @@ The browser prefetches the next wave's plan while you fight the current one, so 
 
 High scores are an arcade-style top 10 per device (browser local storage): one board for normal runs and one per Daily Run.
 
+## How I worked: AI-assisted, test-verified
+
+Neon Swarm is a sister project to [RPS Chaos](https://github.com/GaretJax6905/rps-chaos). My goal was something far more graphics-heavy that still runs smoothly on a phone. I built it with Claude (an AI coding assistant) as a pair programmer: I set the goals, playtested it, reported what felt wrong, and decided what shipped. The AI wrote most of the code, and CI runs `check.py` on every push.
+
+### One bug, start to finish
+
+[`7ce0ae3`](https://github.com/GaretJax6905/neon-swarm/commit/7ce0ae3): **XP shards overshooting the ship.**
+
+1. **What I noticed while playtesting.** The magnet didn't always pull XP to the ship. Sometimes shards shot straight past it.
+2. **The cause.** Shards *accelerated* toward the ship, so fast ones swung past or orbited it. A shard also only locked on after its 0.25 s "pop" out of an explosion, so dashing away during that window left it behind.
+3. **The test came first.** We added a real-browser test that drops 40 shards in a ring around the ship while it dashes in two directions. It fails if any locked shard is still loose afterwards.
+4. **The first fix wasn't enough.** It steered the shards' velocity instead, and it still failed the new test intermittently. The final fix moves each locked shard's *position* straight at the ship every frame, and collects it once a step would reach the ship. Overshooting is now impossible by construction. The test passed 6 runs in a row, and the full suite stayed green.
+
+The lesson I took from it: a test that reproduces what a player actually saw is what separates "looks fixed" from "is fixed."
+
 ## Run it locally
 
 ```bash
@@ -115,3 +142,9 @@ GitHub Actions runs the same `check.py` on every push and pull request.
 ## Deploy (Render)
 
 `render.yaml` is a Render Blueprint: free plan, one gunicorn worker, auto-deploys from `main`. The app is stateless, so restarts lose nothing.
+
+## Author
+
+**Thomas Moylan** · IT student at NJIT, building toward front-end engineering · [@GaretJax6905](https://github.com/GaretJax6905)
+
+More projects: [RPS Chaos](https://github.com/GaretJax6905/rps-chaos) (boss-rush RPS with a learning AI and online play) · [Plaque Attack](https://github.com/GaretJax6905/plaque-attack) (educational dental game) · [MoodWave](https://github.com/GaretJax6905/moodwave) (Web Audio synthesizer and visualizer)
