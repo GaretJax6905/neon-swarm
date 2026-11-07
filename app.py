@@ -43,6 +43,7 @@ def _config():
         "repair_every": upgrades.REPAIR_EVERY,
         "repair_amount": upgrades.REPAIR_AMOUNT,
         "blade_hp": upgrades.BLADE_HP,
+        "blade_repair_every": upgrades.BLADE_REPAIR_EVERY,
         "xp_table": [upgrades.xp_to_next(level) for level in range(1, 101)],
         "boss_every": waves.BOSS_EVERY,
         "daily": daily_seed(),

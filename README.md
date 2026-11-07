@@ -45,7 +45,7 @@ If you stop moving the mouse for a couple of seconds, auto-aim takes over.
 | 🛑 Bulwark | 9 | Slow, armored, shoves you back |
 | ⬢ **The Hive** | every 10th | Boss: bullet rings, spawns Drifters, enrages at half HP (one more Hive each lap) |
 
-Enemies get +8% HP and +2% speed per wave (speed caps at +60%). Kills chain into a combo multiplier (up to ×5). Getting hit costs a shield; with no shields left, the next hit ends the run.
+Tougher enemies drop more XP shards: 1 from a Drifter or Dart, 3 from a Splitter, 5 from an Orbiter, 10 from a Bulwark, and a big 40-XP burst from the Hive. Enemies get +8% HP and +2% speed per wave (speed caps at +60%). Kills chain into a combo multiplier (up to ×5). Getting hit costs a shield; with no shields left, the next hit ends the run.
 
 ## Upgrades
 
@@ -62,7 +62,7 @@ Enemies get +8% HP and +2% speed per wave (speed caps at +60%). Kills chain into
 | 💨 Blink Drive | Dash recharges 25% faster | 3 |
 | 💥 Nova Core | Dashing releases a shockwave | 3 |
 
-**Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. A broken blade can be bought back on a later level-up.
+**Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. **Every cleared wave, each damaged blade repairs 1 hit**, so a blade you keep out of trouble can be saved. A broken blade can be bought back on a later level-up.
 
 **Every 5th level** (5, 10, 15, …) repairs **2 shields**, shown on that level's upgrade screen.
 

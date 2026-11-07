@@ -58,7 +58,7 @@ UPGRADES = {
         "name": "Orbit Blades",
         "icon": "🌀",
         "text": "+1 blade. Blades shoot at half your fire rate and block enemy shots, "
-        "but break after 5 hits.",
+        "but break after 5 hits. Damaged blades repair 1 hit each wave.",
         "max": None,
     },
     "nova": {
@@ -73,6 +73,7 @@ OFFER_SIZE = 3
 REPAIR_EVERY = 5
 REPAIR_AMOUNT = 2
 BLADE_HP = 5  # enemy-bullet hits an orbit blade survives
+BLADE_REPAIR_EVERY = 1  # damaged blades repair 1 hit every this many cleared waves
 
 
 def is_endless(key):

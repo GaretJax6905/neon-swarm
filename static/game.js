@@ -1165,7 +1165,9 @@
 
   function dropXp(x, y, total) {
     while (total > 0 && G.n < G.max) {
-      const val = total >= 5 ? 5 : 1;
+      // Single shards for normal kills, so tougher enemies visibly drop more of
+      // them; only big payouts (the Hive) bundle into 5-XP shards.
+      const val = total >= 15 ? 5 : 1;
       total -= val;
       const i = G.n++;
       const a = Math.random() * TAU;
@@ -1333,6 +1335,25 @@
       game.score += 50 * game.wave;
       ring(player.x, player.y, 900, C.cyan, 0.9, 3);
       gridImpulse(player.x, player.y, 700, 700);
+      if (game.wave % CONFIG.blade_repair_every === 0) repairBlades();
+    }
+  }
+
+  // Each cleared wave, every damaged blade repairs one hit (a slow trickle),
+  // so a blade you protect can be saved.
+  function repairBlades() {
+    let fixed = 0;
+    for (const blade of player.blades) {
+      if (blade.hp < CONFIG.blade_hp) {
+        blade.hp++;
+        blade.hitT = 0.25;
+        burst(blade.x, blade.y, C.cyan, 10, 200, 0.4, 1.6);
+        fixed++;
+      }
+    }
+    if (fixed) {
+      floatText(player.x, player.y - 46, fixed > 1 ? "BLADES REPAIRED" : "BLADE REPAIRED", C.cyan);
+      sfx.pickup();
     }
   }
 
@@ -2739,6 +2760,14 @@
     },
     setShields: (n) => {
       player.shields = n;
+    },
+    // Drop n XP at the ship, the way a kill would (for tests).
+    dropXp: (n) => dropXp(player.x + 200, player.y + 200, n),
+    // Finish the current wave right away, as if every enemy had been destroyed (for tests).
+    clearWave: () => {
+      game.groups.forEach((g) => (g.done = true));
+      game.telegraphs = [];
+      enemies.forEach((e) => (e.dead = true));
     },
     jumpTo: async (n) => {
       enemies.forEach((e) => (e.dead = true));
