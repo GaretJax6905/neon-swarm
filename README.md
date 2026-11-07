@@ -18,7 +18,7 @@ A sister project to [RPS Chaos](https://github.com/GaretJax6905/rps-chaos), buil
 | Aim + fire | Point the mouse (fires automatically) | Automatic: nearest enemy |
 | Dash (invincible) | `Space`, `Shift` or right-click | DASH button |
 | Pick an upgrade | `1` `2` `3` or click | Tap a card |
-| Pause / mute / FPS | `P` / `M` / `F` | ❚❚ button |
+| Pause / mute all / music / FPS | `P` / `M` / `N` / `F` | ❚❚ button, Music checkbox |
 
 If you stop moving the mouse for a couple of seconds, auto-aim takes over.
 
@@ -53,6 +53,18 @@ Enemies get +8% HP and +2% speed per wave (speed caps at +60%). Kills chain into
 **Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. A broken blade can be bought back on a later level-up.
 
 **Every 5th level** (5, 10, 15, …) repairs **2 shields**, shown on that level's upgrade screen.
+
+## Music
+
+Three original tracks, synthesized live in the browser with the Web Audio API (no audio files, nothing to download or license):
+
+| When | Track |
+| --- | --- |
+| Menu | Calm: soft pads and a slow arpeggio |
+| Normal waves | A-minor synthwave at 112 BPM: arpeggio and bass, then drums, then a lead melody |
+| **The Hive** | E-Phrygian at 140 BPM: galloping distorted bass, four-on-the-floor kick, siren lead. It gets brighter and the lead never stops once the Hive is below half health |
+
+Tracks crossfade when a boss arrives or dies, and duck while paused or picking an upgrade. A small step sequencer schedules notes ~0.15 s ahead on the audio clock, so timing stays tight even when frames run long. **N** toggles music, **M** mutes everything, and there's a Music checkbox on the menu. Music starts on your first click or key press, since browsers block sound before that.
 
 ## How it stays smooth (60 fps on phones)
 

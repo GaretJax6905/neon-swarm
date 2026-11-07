@@ -72,7 +72,7 @@
     { name: "Medium", dpr: 1.5, particles: 0.65, grid: true, stars: 1 },
     { name: "High", dpr: 2, particles: 1, grid: true, stars: 2 },
   ];
-  const settings = { quality: store.get("neon-swarm:quality", "auto"), shake: store.get("neon-swarm:shake", true), muted: store.get("neon-swarm:muted", false), fps: false };
+  const settings = { quality: store.get("neon-swarm:quality", "auto"), shake: store.get("neon-swarm:shake", true), muted: store.get("neon-swarm:muted", false), music: store.get("neon-swarm:music", true), fps: false };
   let qLevel = settings.quality === "auto" ? 2 : Number(settings.quality);
   let q = QUALITY[qLevel];
 
@@ -170,7 +170,7 @@
       return ac;
     }
     function tone(freq, dur, type = "square", vol = 0.2, slide = 0) {
-      if (settings.muted || !ensure()) return;
+      if (settings.muted || settings.sfxOff || !ensure()) return;
       const t = ac.currentTime;
       const o = ac.createOscillator();
       const g = ac.createGain();
@@ -184,7 +184,7 @@
       o.stop(t + dur + 0.02);
     }
     function noise(dur, vol = 0.3, cutoff = 1200) {
-      if (settings.muted || !ensure()) return;
+      if (settings.muted || settings.sfxOff || !ensure()) return;
       const t = ac.currentTime;
       const len = Math.floor(ac.sampleRate * dur);
       const buf = ac.createBuffer(1, len, ac.sampleRate);
@@ -201,6 +201,7 @@
       src.start(t);
     }
     return {
+      context: ensure,
       unlock() {
         if (ensure() && ac.state === "suspended") ac.resume();
       },
@@ -230,6 +231,303 @@
         tone(440, 0.1, "triangle", 0.12);
         setTimeout(() => tone(660, 0.16, "triangle", 0.12), 90);
       },
+    };
+  })();
+
+
+  // ---------- music (original tracks, synthesized live; no audio files) ----------
+  // A small step sequencer: every 25 ms it schedules the next ~0.15 s of notes
+  // on the Web Audio clock, so timing stays tight even if a frame runs long.
+  const music = (() => {
+    const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const VOLUME = 0.42;
+    let ac = null;
+    let out = null; // music master
+    let echo = null; // delay send for the arps and leads
+    let grit = null; // distortion for the boss bass
+    let noise = null; // shared white-noise buffer for drums
+    let timer = 0;
+    let current = "off";
+    let duck = 1;
+    let notes = 0;
+    let intensity = 0; // 0..1: the Hive enrages
+    const tracks = {};
+
+    // ----- track data (all original) -----
+    // Normal waves: A minor synthwave, Am - F - C - G, 112 BPM.
+    const PLAY = {
+      bpm: 112,
+      chords: [
+        [57, 60, 64],
+        [57, 60, 65],
+        [55, 60, 64],
+        [55, 59, 62],
+      ],
+      bass: [45, 41, 48, 43],
+      lead: [
+        [76, null, 81, null, 79, 76, null, 74],
+        [72, null, 74, 76, null, 72, 69, null],
+        [72, null, 79, null, 76, 72, null, 67],
+        [71, null, 74, null, 79, null, 74, 71],
+      ],
+    };
+    // Hive fights: E Phrygian, Em - F - Em - D, 140 BPM, gritty galloping bass.
+    const BOSS = {
+      bpm: 140,
+      chords: [
+        [64, 67, 71],
+        [65, 69, 72],
+        [64, 67, 71],
+        [62, 66, 69],
+      ],
+      bass: [40, 41, 40, 38],
+      lead: [
+        [76, 77, 76, 71, 76, 77, 79, 77],
+        [77, 79, 77, 72, 77, 79, 81, 79],
+        [76, 77, 76, 71, 76, 79, 83, 79],
+        [74, 76, 74, 69, 74, 76, 78, 74],
+      ],
+    };
+
+    function init() {
+      if (ac) return true;
+      ac = sfx.context();
+      if (!ac) return false;
+      out = ac.createGain();
+      out.gain.value = 0;
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.ratio.value = 4;
+      const makeup = ac.createGain();
+      makeup.gain.value = 2.2;
+      out.connect(comp).connect(makeup).connect(ac.destination);
+
+      echo = ac.createDelay(1);
+      const fb = ac.createGain();
+      const wet = ac.createGain();
+      fb.gain.value = 0.32;
+      wet.gain.value = 0.35;
+      echo.connect(fb).connect(echo);
+      echo.connect(wet).connect(out);
+
+      grit = ac.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < curve.length; i++) {
+        const x = (i / (curve.length - 1)) * 2 - 1;
+        curve[i] = Math.tanh(x * 3.2);
+      }
+      grit.curve = curve;
+      const gritOut = ac.createGain();
+      gritOut.gain.value = 1;
+      grit.connect(gritOut).connect(out);
+
+      noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const data = noise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+      for (const name of ["calm", "play", "boss"]) {
+        const g = ac.createGain();
+        g.gain.value = 0;
+        g.connect(out);
+        tracks[name] = { name, gain: g, step: 0, next: 0, level: 0 };
+      }
+      timer = setInterval(schedule, 25);
+      applyVolume(0.6);
+      return true;
+    }
+
+    // ----- instruments -----
+    function voice(dest, freq, t, dur, { type = "sawtooth", vol = 0.1, cutoff = 2000, attack = 0.005, release = 0.08, detune = 0, sendEcho = 0 } = {}) {
+      const o = ac.createOscillator();
+      const f = ac.createBiquadFilter();
+      const g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      o.detune.value = detune;
+      f.type = "lowpass";
+      f.frequency.value = cutoff;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol, t + attack);
+      g.gain.setValueAtTime(vol, t + Math.max(attack, dur - release));
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      o.connect(f).connect(g).connect(dest);
+      if (sendEcho) {
+        const s = ac.createGain();
+        s.gain.value = sendEcho;
+        g.connect(s).connect(echo);
+      }
+      o.start(t);
+      o.stop(t + dur + 0.02);
+      notes++;
+    }
+
+    function kick(dest, t, vol = 0.9) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      o.connect(g).connect(dest);
+      o.start(t);
+      o.stop(t + 0.3);
+      notes++;
+    }
+
+    function hiss(dest, t, dur, vol, freq, type = "highpass") {
+      const src = ac.createBufferSource();
+      src.buffer = noise;
+      const f = ac.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      src.connect(f).connect(g).connect(dest);
+      src.start(t, Math.random() * 0.5, dur + 0.02);
+      notes++;
+    }
+
+    function snare(dest, t, vol = 0.35) {
+      hiss(dest, t, 0.16, vol, 1400);
+      voice(dest, 190, t, 0.08, { type: "triangle", vol: vol * 0.6, cutoff: 1200 });
+    }
+
+    // ----- what each track plays on one 16th-note step -----
+    function playStep(tr, step, t) {
+      const d = tr.gain;
+      const s16 = 60 / PLAY.bpm / 4;
+      const bar = Math.floor(step / 16);
+      const i = step % 16;
+      const chordIx = bar % 4;
+      const chord = PLAY.chords[chordIx];
+      const calm = tr.name === "calm";
+      // The 16-bar song: 4 intro bars, then drums, then the lead melody on bars 8-15.
+      const section = bar < 4 ? 0 : bar % 16 < 8 ? 1 : 2;
+      if (i === 0) {
+        for (const n of chord) {
+          voice(d, midi(n), t, s16 * 16, { vol: calm ? 0.05 : 0.04, cutoff: calm ? 900 : 1400, attack: 0.4, release: 0.6, detune: -7 });
+          voice(d, midi(n), t, s16 * 16, { vol: calm ? 0.05 : 0.04, cutoff: calm ? 900 : 1400, attack: 0.4, release: 0.6, detune: 7 });
+        }
+      }
+      // arpeggio
+      const order = bar % 8 < 4 ? [0, 1, 2, 3, 2, 1, 0, 1] : [0, 2, 1, 3, 0, 2, 1, 3];
+      const tones = [chord[0] + 12, chord[1] + 12, chord[2] + 12, chord[0] + 24];
+      if (!calm || i % 2 === 0) {
+        voice(d, midi(tones[order[i % 8]]), t, s16 * 0.9, { type: "square", vol: calm ? 0.035 : 0.04, cutoff: calm ? 1500 : 2600, sendEcho: 0.5 });
+      }
+      if (calm) return;
+      // bass: pulsing 8ths with an octave pop on the offbeat
+      if (i % 2 === 0) {
+        const root = PLAY.bass[chordIx];
+        voice(d, midi(i % 4 === 2 ? root + 12 : root), t, s16 * 1.8, { vol: 0.13, cutoff: 700 });
+      }
+      // drums
+      if (i % 4 === 2) hiss(d, t, 0.04, 0.07, 8000);
+      if (section >= 1) {
+        if (i === 0 || i === 8 || (i === 10 && bar % 2)) kick(d, t, 0.8);
+        if (i === 4 || i === 12) snare(d, t, 0.28);
+        if (i % 2 === 1) hiss(d, t, 0.03, 0.035, 9000);
+      }
+      // lead melody (8th notes)
+      if (section === 2 && i % 2 === 0) {
+        const n = PLAY.lead[chordIx][i / 2];
+        if (n) voice(d, midi(n), t, s16 * 1.9, { type: "sawtooth", vol: 0.06, cutoff: 3200, sendEcho: 0.45, detune: 5 });
+      }
+    }
+
+    function bossStep(tr, step, t) {
+      const d = tr.gain;
+      const s16 = 60 / BOSS.bpm / 4;
+      const bar = Math.floor(step / 16);
+      const i = step % 16;
+      const chordIx = bar % 4;
+      const chord = BOSS.chords[chordIx];
+      const root = BOSS.bass[chordIx];
+      const hot = intensity > 0.5;
+      // galloping distorted bass: da-da-DUM
+      if ([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15].includes(i)) {
+        voice(grit, midi(i % 4 === 0 ? root : root + (i === 15 ? 12 : 0)), t, s16 * 0.85, { vol: 0.2, cutoff: hot ? 1800 : 1100 });
+      }
+      // four-on-the-floor + snare, with a roll at the end of every 4th bar
+      if (i % 4 === 0) kick(d, t, 0.95);
+      if (i === 4 || i === 12) snare(d, t, 0.34);
+      if (bar % 4 === 3 && i >= 12) snare(d, t, 0.16 + (i - 12) * 0.05);
+      hiss(d, t, i % 4 === 2 ? 0.12 : 0.03, i % 2 ? 0.03 : 0.05, 7500);
+      // offbeat chord stabs
+      if (i % 4 === 2) {
+        for (const n of chord) voice(d, midi(n), t, s16 * 0.7, { type: "square", vol: 0.04, cutoff: hot ? 3500 : 2200 });
+      }
+      // siren lead on bars 4-7 of each 8 (always once the Hive is enraged)
+      if ((bar % 8 >= 4 || hot) && i % 2 === 0) {
+        const n = BOSS.lead[chordIx][i / 2];
+        voice(d, midi(n), t, s16 * 1.8, { type: "sawtooth", vol: 0.07, cutoff: hot ? 4500 : 3000, sendEcho: 0.3, detune: 8 });
+      }
+      // low drone so the arena feels huge
+      if (i === 0) voice(d, midi(root - 12), t, s16 * 16, { type: "triangle", vol: 0.08, cutoff: 300, attack: 0.2, release: 0.3 });
+    }
+
+    function schedule() {
+      if (!ac || ac.state !== "running") return;
+      const ahead = ac.currentTime + 0.15;
+      for (const name in tracks) {
+        const tr = tracks[name];
+        if (tr.level <= 0.001 && tr.name !== current) continue;
+        const bpm = name === "boss" ? BOSS.bpm : PLAY.bpm;
+        const s16 = 60 / bpm / 4;
+        if (tr.next < ac.currentTime) tr.next = ac.currentTime + 0.05;
+        while (tr.next < ahead) {
+          if (name === "boss") bossStep(tr, tr.step, tr.next);
+          else playStep(tr, tr.step, tr.next);
+          tr.step++;
+          // after the first 16 bars, loop bars 4-15 (skip the intro)
+          if (name !== "boss" && tr.step >= 256) tr.step = 64;
+          tr.next += s16;
+        }
+      }
+    }
+
+    function applyVolume(fade = 0.4) {
+      if (!ac) return;
+      const on = settings.music && !settings.muted;
+      const t = ac.currentTime;
+      out.gain.cancelScheduledValues(t);
+      out.gain.setTargetAtTime(on ? VOLUME * duck : 0, t, fade / 3);
+    }
+
+    return {
+      // "calm" | "play" | "boss" | "off"
+      play(name) {
+        if (name === current || !init()) return;
+        const t = ac.currentTime;
+        for (const key in tracks) {
+          const tr = tracks[key];
+          const target = key === name ? (key === "boss" ? 1.3 : 1) : 0;
+          if (target && tr.level <= 0.001) {
+            tr.step = 0; // start the song from the top
+            tr.next = t + 0.08;
+          }
+          tr.level = target;
+          tr.gain.gain.cancelScheduledValues(t);
+          tr.gain.gain.setTargetAtTime(target, t, name === "boss" || current === "boss" ? 0.25 : 0.6);
+        }
+        current = name;
+      },
+      duck(amount) {
+        if (amount === duck) return;
+        duck = amount;
+        applyVolume(0.3);
+      },
+      intensity(x) {
+        intensity = x;
+      },
+      refresh: () => applyVolume(0.2),
+      suspend(hidden) {
+        if (!ac) return;
+        if (hidden) ac.suspend();
+        else if (ac.state === "suspended") ac.resume();
+      },
+      state: () => ({ track: current, notes, running: !!ac && ac.state === "running" }),
     };
   })();
 
@@ -637,8 +935,10 @@
     if (k === "m") {
       settings.muted = !settings.muted;
       store.set("neon-swarm:muted", settings.muted);
+      music.refresh();
       showBanner(settings.muted ? "MUTED" : "SOUND ON", "", false, 0.8);
     }
+    if (k === "n") setMusic(!settings.music);
     if (k === "f") {
       settings.fps = !settings.fps;
       $("#fps").hidden = !settings.fps;
@@ -2232,7 +2532,51 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) pause(true);
+    music.suspend(document.hidden);
   });
+
+  function setMusic(on) {
+    settings.music = on;
+    store.set("neon-swarm:music", on);
+    $("#music-opt").checked = on;
+    music.refresh();
+    if (game.mode !== "menu") showBanner(on ? "MUSIC ON" : "MUSIC OFF", "", false, 0.8);
+  }
+  $("#music-opt").checked = settings.music;
+  $("#music-opt").addEventListener("change", (e) => setMusic(e.target.checked));
+
+  // Browsers only allow sound after the first tap/click/key, so music starts then.
+  const startAudio = () => {
+    sfx.unlock();
+    updateMusic();
+  };
+  window.addEventListener("pointerdown", startAudio, { once: true, capture: true });
+  window.addEventListener("keydown", startAudio, { once: true, capture: true });
+
+  // Pick the track for what's on screen: menu, normal waves, or a Hive fight.
+  function updateMusic() {
+    if (!audioStarted()) return;
+    let track = "calm";
+    let boss = null;
+    if (game.mode !== "menu" && !(game.mode === "over" && game.overT <= 0)) {
+      for (const e of enemies) if (e.kind === "hive" && !e.dead) boss = e;
+      const incoming = game.telegraphs.some((tg) => tg.kind === "hive");
+      track = boss || incoming ? "boss" : "play";
+    }
+    music.play(track);
+    music.intensity(boss && boss.hp < boss.maxHp / 2 ? 1 : 0);
+    music.duck(game.mode === "pause" || game.mode === "levelup" ? 0.45 : 1);
+  }
+
+  let audioOk = false;
+  function audioStarted() {
+    if (!audioOk) {
+      const ctx = sfx.context();
+      audioOk = !!ctx && ctx.state !== "suspended";
+      if (ctx && ctx.state === "suspended") ctx.resume().then(() => (audioOk = true)).catch(() => {});
+    }
+    return audioOk;
+  }
 
   // enemy codex with tiny live-drawn icons
   $("#codex").innerHTML = Object.entries(ENEMY)
@@ -2323,6 +2667,7 @@
       }
     }
     render(realDt);
+    if (audioOk) updateMusic();
     workMs += (performance.now() - now - workMs) * 0.05;
 
     fpsAcc += rawMs;
@@ -2348,6 +2693,7 @@
       enemies: enemies.length,
       particles: P.n,
       gems: G.n,
+      music: music.state(),
       maxShields: player.maxShields,
       shipShots: shotCount[0],
       bladeShots: shotCount[1],
@@ -2363,6 +2709,9 @@
       frameTimes: Array.from(frameTimes),
     }),
     giveXp: (n) => gainXp(n),
+    sfxOff: (off) => {
+      settings.sfxOff = off; // tests only: hear the music without effects
+    },
     // Fire an enemy bullet straight at blade k (for tests).
     shootBlade: (k) => {
       const b = player.blades[k];

@@ -173,3 +173,31 @@ def test_blade_breaks_after_five_enemy_hits(page: Page, live_server):
     assert state["upgrades"]["orbit"] == 1
     page.evaluate("window.__neon.grant('orbit', 1)")
     assert snapshot(page)["bladeHp"] == [5, 5] or len(snapshot(page)["bladeHp"]) == 2
+
+
+def test_music_follows_the_fight(page: Page, live_server):
+    """Calm on the menu, synthwave in waves, the boss track for the Hive, and back."""
+    page.goto(live_server)
+    page.locator("#title").click()  # first gesture unlocks audio
+    page.wait_for_function(
+        "window.__neon.snapshot().music.track === 'calm'", timeout=5000
+    )
+    page.click("#play-btn")
+    page.wait_for_function(
+        "window.__neon.snapshot().music.track === 'play'", timeout=5000
+    )
+    page.evaluate("window.__neon.setShields(99)")
+    page.evaluate("window.__neon.jumpTo(10)")
+    page.wait_for_function(
+        "window.__neon.snapshot().music.track === 'boss'", timeout=5000
+    )
+    page.evaluate("window.__neon.jumpTo(11)")
+    page.wait_for_function(
+        "window.__neon.snapshot().music.track === 'play'", timeout=5000
+    )
+    state = snapshot(page)["music"]
+    assert state["notes"] > 0 or not state["running"]
+    page.keyboard.press("n")
+    assert (
+        page.evaluate("JSON.parse(localStorage.getItem('neon-swarm:music'))") is False
+    )
