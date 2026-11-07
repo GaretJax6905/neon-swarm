@@ -62,7 +62,7 @@ Tougher enemies drop more XP shards: 1 from a Drifter or Dart, 3 from a Splitter
 | 💨 Blink Drive | Dash recharges 25% faster | 3 |
 | 💥 Nova Core | Dashing releases a shockwave | 3 |
 
-**Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. **Every 2 cleared waves, each damaged blade repairs 1 hit**, so a blade you keep out of trouble can be saved. A broken blade can be bought back on a later level-up.
+**Orbit Blades** spin around the ship, cut enemies they touch, and **shoot** at the nearest enemy at half the ship's fire rate each, using your damage, pierce and fire-rate upgrades. They also **block enemy bullets**, but every blade breaks after **5 hits**. Its color shows how many hits it has left: cyan, then yellow, then red. **Every cleared wave, each damaged blade repairs 1 hit**, so a blade you keep out of trouble can be saved. A broken blade can be bought back on a later level-up.
 
 **Every 5th level** (5, 10, 15, …) repairs **2 shields**, shown on that level's upgrade screen.
 

@@ -205,8 +205,8 @@ def test_music_follows_the_fight(page: Page, live_server):
     )
 
 
-def test_damaged_blades_repair_every_second_wave(page: Page, live_server):
-    """A chipped blade regains one hit after each even wave, up to full."""
+def test_damaged_blades_repair_one_hit_each_wave(page: Page, live_server):
+    """A chipped blade regains one hit per cleared wave, and stops at full."""
     start(page, live_server)
     page.evaluate("window.__neon.setShields(99)")
     page.evaluate("window.__neon.grant('orbit', 2)")
@@ -215,12 +215,12 @@ def test_damaged_blades_repair_every_second_wave(page: Page, live_server):
         page.wait_for_function(
             f"window.__neon.snapshot().bladeHp.includes({5 - hit})", timeout=3000
         )
-    page.evaluate("window.__neon.clearWave()")  # wave 1: odd, no repair
-    page.wait_for_function("window.__neon.snapshot().wave === 2", timeout=10000)
-    assert sorted(snapshot(page)["bladeHp"]) == [3, 5]
-    page.evaluate("window.__neon.clearWave()")  # wave 2: repair
-    page.wait_for_function("window.__neon.snapshot().bladeHp.includes(4)", timeout=5000)
-    assert sorted(snapshot(page)["bladeHp"]) == [4, 5]
+    for wave, expected in ((2, [4, 5]), (3, [5, 5]), (4, [5, 5])):
+        page.evaluate("window.__neon.clearWave()")
+        page.wait_for_function(
+            f"window.__neon.snapshot().wave === {wave}", timeout=10000
+        )
+        assert sorted(snapshot(page)["bladeHp"]) == expected, wave
 
 
 def test_tough_enemies_drop_a_shard_per_xp(page: Page, live_server):

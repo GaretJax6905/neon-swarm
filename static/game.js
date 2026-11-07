@@ -1339,8 +1339,8 @@
     }
   }
 
-  // Every couple of cleared waves, each damaged blade repairs one hit, so a
-  // blade you protect can be saved.
+  // Each cleared wave, every damaged blade repairs one hit (a slow trickle),
+  // so a blade you protect can be saved.
   function repairBlades() {
     let fixed = 0;
     for (const blade of player.blades) {
