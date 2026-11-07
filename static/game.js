@@ -1438,13 +1438,16 @@
       let diff = ((want - player.ang + Math.PI * 3) % TAU) - Math.PI;
       player.ang += diff * Math.min(1, 8 * dt);
     }
+    // Catch up on missed shots after a long frame (up to 4), like the blade guns,
+    // so a slow device doesn't quietly lower the ship's fire rate.
     player.fireT -= dt;
-    if (player.fireT <= 0) {
+    for (let guard = 0; guard < 4 && player.fireT <= 0; guard++) {
       if (mouseAim ? enemies.length > 0 : target) {
         fire();
         player.fireT += 1 / S.fireRate();
       } else {
         player.fireT = 0;
+        break;
       }
     }
   }

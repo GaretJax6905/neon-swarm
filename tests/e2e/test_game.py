@@ -138,11 +138,13 @@ def test_every_fifth_level_repairs_two_shields(page: Page, live_server):
     for _ in range(3):
         expect(page.locator("#levelup")).to_be_visible()
         expect(page.locator("#levelup-bonus")).to_be_hidden()
-        page.keyboard.press("1")
+        # Skip Reinforced Hull: it repairs a shield too, which would blur the check.
+        cards = page.locator("#cards .card").all_inner_texts()
+        pick = next(i for i, text in enumerate(cards) if "Hull" not in text)
+        page.keyboard.press(str(pick + 1))
     expect(page.locator("#levelup-num")).to_have_text("5")
     expect(page.locator("#levelup-bonus")).to_contain_text("+2 shields repaired")
-    state = snapshot(page)
-    assert state["shields"] == min(3, state["maxShields"]) or state["shields"] == 3
+    assert snapshot(page)["shields"] == 3
 
 
 def test_hull_is_endless_and_hud_stays_compact(page: Page, live_server):
